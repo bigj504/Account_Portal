@@ -5,3 +5,4 @@ Intend to implement some encryption in future.
 
 External Dependency: pysqlite3
 
+PyCharm
