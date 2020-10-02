@@ -2,7 +2,14 @@ from tkinter import *
 import sqlite3
 import string
 import random
-
+from Crypto.PublicKey import RSA
+from Crypto.Cipher import PKCS1_OAEP
+from Crypto.Signature import PKCS1_v1_5
+from Crypto.Hash import SHA512, SHA384, SHA256, SHA, MD5
+from Crypto import Random
+from base64 import b64encode, b64decode
+global hash
+hash = "SHA-256"
 
 
 def register_menu():
@@ -46,20 +53,44 @@ def convertTuple(tup):
     return str
 
 def register_user():
+    global publicKey
+    global privateKey
     connection = sqlite3.connect("locker.db")
     cursor = connection.cursor()
+   # cursor2 = connection.cursor()
 
     AccountNum = id_generator(10)
     username_record = username.get()
    # print(username_record)
     password_record = password.get()
+    password_record = password_record.encode()
+    publicKey, privateKey = newkeys(1024)
+    privateKey =  privateKey.exportKey(format='PEM')
+
+    print(privateKey)
+    #try:
+    cursor.execute("Insert INTO tablePrivate(PrivateKey, Username) VALUES(?, ?)", (privateKey, username_record))
+    connection.commit()
+    #except Exception :
+       # pass
+        #print("Error")
+    password_record = encrypt(password_record, publicKey)
+
+    print(password_record)
+   # password_record = decrypt(password_record, privateKey)
+   # print(password_record.decode())
     username_entry.delete(0,END)
     password_entry.delete(0,END)
     #print(password_record)
-    cursor.execute("Insert INTO tablePW(AccountNum, Username, Password) VALUES(?, ?, ?)", (AccountNum, username_record, password_record))
-    connection.commit()
-    cursor.close()
-    Label(register_window, text="Registration Succes", fg="green", font=("calibri", 11)).pack()
+    try:
+        cursor.execute("Insert INTO tablePW(AccountNum, Username, Password) VALUES(?, ?, ?)", (AccountNum, username_record, password_record))
+        connection.commit()
+        cursor.close()
+        Label(register_window, text="Registration Succes", fg="green", font=("calibri", 11)).pack()
+    except Exception :
+        register_window.destroy()
+        register_menu()
+        unique_username_box()
 
 def login_menu():
     global login_window
@@ -102,13 +133,33 @@ def login_verify():
   password_login_entry.delete(0, END)
 
   query = """select Password from tablePW where Username = ?"""
+  #query1 = """select privateKey from tablePrivate where Username = ?"""
+ # cursor1.execute(query1,(username1,))
+
   cursor1.execute(query, (username1,))
   verifyPW = cursor1.fetchall()
-  sum(map(len, verifyPW))
+  connection1.close()
+  connection3 = sqlite3.connect("locker.db")
+  cursor3 = connection3.cursor()
+  query1 = """select privateKey from tablePrivate where Username = ?"""
+  cursor3.execute(query1,(username1,))
+  verifyPR = cursor3.fetchall()
 
-  if sum(map(len, verifyPW)) > 0:
+  print(verifyPR)
+  #query is list of tuples, even with 1 element so deconstructing
+  verifyPR = verifyPR[0]
+  verifyPR = verifyPR[0]
+  verifyPR = importKey(verifyPR)
+  verifyPW = verifyPW[0]
+  verifyPW = verifyPW[0]
+  verifyPW = decrypt(verifyPW, verifyPR)
+  verifyPW = verifyPW.decode()
 
-      verifyPW = convertTuple(verifyPW[0])
+
+
+  if len(verifyPW) > 0:
+
+
 
       if verifyPW == password1:
           login_succes_box()
@@ -133,6 +184,14 @@ def credential_failure_box():
     Label(credential_failure_box, text="Login failed").pack()
     Button(credential_failure_box, text="OK", command=delete_credential_failure_box).pack()
 
+def unique_username_box():
+    global unique_username_box
+    unique_username_box = Toplevel(register_window)
+    unique_username_box.title("Username not found")
+    unique_username_box.geometry("175x125")
+    Label(unique_username_box, text="Username not found").pack()
+    Button(unique_username_box, text="OK", command=delete_unique_user_box()).pack()
+
 
 def login_succes_box():
     global login_succes_box
@@ -141,6 +200,26 @@ def login_succes_box():
     login_succes_box.geometry("175x125")
     Label(login_succes_box, text="Login Success").pack()
     Button(login_succes_box, text="OK", command=delete_login_succes_box).pack()
+
+def newkeys(keysize):
+   random_generator = Random.new().read
+   key = RSA.generate(keysize, random_generator)
+   private, public = key, key.publickey()
+   return public, private
+
+def importKey(externKey):
+   return RSA.importKey(externKey)
+
+def getpublickey(priv_key):
+   return priv_key.publickey()
+
+def encrypt(message, pub_key):
+   cipher = PKCS1_OAEP.new(pub_key)
+   return cipher.encrypt(message)
+
+def decrypt(ciphertext, priv_key):
+   cipher = PKCS1_OAEP.new(priv_key)
+   return cipher.decrypt(ciphertext)
 
 def username_portal():
     global username_portal_box
@@ -172,6 +251,9 @@ def delete_login_failure_box():
 
 def delete_credential_failure_box():
     credential_failure_box.destroy()
+
+def delete_unique_user_box():
+    unique_username_box.destroy()
 
 def main_menu():
     global mainMenu
